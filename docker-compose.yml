@@ -1,0 +1,86 @@
+##
+# Local development stack for BeYourOwnBoss multi-tenant e-commerce platform.
+#
+# Usage:
+#   pnpm docker:up        → starts app + db
+#   pnpm docker:down      → tears everything down
+#   docker compose up db  → start only the database
+#
+# The `app` service builds from the production Dockerfile but injects
+# development env vars via .env. For day-to-day dev you'll likely run
+# `pnpm dev` locally and only spin up the `db` service.
+##
+
+services:
+  # ── Next.js application ────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: byob-app
+    ports:
+      - "${PORT:-3000}:3000"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgres://byob_dev:devpassword123@db:5432/byob_development
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - byob-network
+
+  # ── PostgreSQL (development) ───────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: byob-db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: byob_dev
+      POSTGRES_PASSWORD: devpassword123
+      POSTGRES_DB: byob_development
+    volumes:
+      - byob-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U byob_dev -d byob_development"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - byob-network
+
+  # ── PostgreSQL (test) ──────────────────────────────────────────────
+  # Uses tmpfs so every test run starts with a clean, fast, in-memory DB.
+  db-test:
+    image: postgres:16-alpine
+    container_name: byob-db-test
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: byob_dev
+      POSTGRES_PASSWORD: devpassword123
+      POSTGRES_DB: byob_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U byob_dev -d byob_test"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - byob-network
+
+volumes:
+  byob-pgdata:
+    driver: local
+
+networks:
+  byob-network:
+    driver: bridge

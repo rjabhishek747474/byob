@@ -10,28 +10,54 @@
 !.yarn/releases
 !.yarn/versions
 
-# testing
+# testing & coverage
 /coverage
+/.vitest-cache/
+/playwright-report/
+/test-results/
 
-# next.js
+# next.js & build outputs
 /.next/
 /out/
-
-# production
 /build
+/dist
 
-# misc
+# misc & OS
 .DS_Store
+Thumbs.db
 *.pem
+*.key
+*.cert
+*.crt
+*.pfx
+*.p12
 
-# debug
+# debug logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# environment & secrets
+.env
+.env.*
+.env*.local
+!.env.example
+
+# terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# local uploads
+/uploads/*
+!/uploads/.gitkeep
 
 # vercel
 .vercel
@@ -39,3 +65,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# ide
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj

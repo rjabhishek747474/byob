@@ -1,0 +1,46 @@
+# ── Dependencies ─────────────────────────────────────────────────────
+node_modules
+
+# ── Build output ─────────────────────────────────────────────────────
+.next
+out
+dist
+
+# ── Environment & secrets ────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Version control ──────────────────────────────────────────────────
+.git
+.gitignore
+
+# ── Docker ───────────────────────────────────────────────────────────
+Dockerfile
+docker-compose.yml
+docker-compose.*.yml
+.dockerignore
+
+# ── IDE / Editor ─────────────────────────────────────────────────────
+.vscode
+.idea
+*.swp
+*.swo
+
+# ── OS artefacts ─────────────────────────────────────────────────────
+Thumbs.db
+.DS_Store
+
+# ── Testing & coverage ──────────────────────────────────────────────
+coverage
+.vitest
+*.test.ts
+*.spec.ts
+__tests__
+
+# ── Documentation & misc ────────────────────────────────────────────
+README.md
+CHANGELOG.md
+LICENSE
+docs
+*.md
