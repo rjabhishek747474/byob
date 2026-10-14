@@ -26,7 +26,7 @@ export async function seed(): Promise<void> {
     console.log('Beginning database seed...');
 
     // 1. Password hashing
-    const defaultPasswordHash = bcrypt.hashSync('Admin123!', 10);
+    const defaultPasswordHash = bcrypt.hashSync('AdminPassword123!', 10);
 
     // 2. Platform Admin User
     let platformAdmin = await db.query.users.findFirst({
