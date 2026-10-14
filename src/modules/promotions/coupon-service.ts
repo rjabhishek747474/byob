@@ -192,6 +192,8 @@ export async function validateCoupon(
   subtotal: number = 0,
   _items?: unknown[]
 ): Promise<CouponValidationResult> {
+  const safeSubtotal = typeof subtotal === 'number' && Number.isFinite(subtotal) ? Math.max(0, Math.floor(subtotal)) : 0;
+
   if (!tenantId || !code) {
     return {
       valid: false,
@@ -254,7 +256,7 @@ export async function validateCoupon(
   }
 
   // Validate minimum subtotal requirement
-  if (coupon.minSubtotal > 0 && subtotal < coupon.minSubtotal) {
+  if (coupon.minSubtotal > 0 && safeSubtotal < coupon.minSubtotal) {
     const minRequiredFormatted = formatMoney(createMoney(coupon.minSubtotal, 'INR'));
     return {
       valid: false,
@@ -289,11 +291,11 @@ export async function validateCoupon(
   // Calculate discount in minor units
   let discountAmount = 0;
   if (coupon.discountType === 'percentage') {
-    discountAmount = Math.round((subtotal * coupon.discountValue) / 100);
-    discountAmount = Math.min(discountAmount, subtotal);
+    discountAmount = Math.round((safeSubtotal * coupon.discountValue) / 100);
+    discountAmount = Math.max(0, Math.min(discountAmount, safeSubtotal));
   } else {
     // Fixed amount discount
-    discountAmount = Math.min(coupon.discountValue, subtotal);
+    discountAmount = Math.max(0, Math.min(coupon.discountValue, safeSubtotal));
   }
 
   return {
