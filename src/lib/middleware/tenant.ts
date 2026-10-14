@@ -79,8 +79,16 @@ export function extractTenantSlug(request: NextRequest): string | null {
     }
   }
 
-  // 2. Fallback: x-tenant-slug header in non-production environments
+  // 2. Fallback: query param (?tenant=) or x-tenant-slug header in non-production environments
   if (process.env.NODE_ENV !== 'production') {
+    const querySlug = request.nextUrl.searchParams.get('tenant');
+    if (querySlug && querySlug.trim().length > 0) {
+      const sanitized = querySlug.trim().toLowerCase();
+      if (!RESERVED_SUBDOMAINS.has(sanitized)) {
+        return sanitized;
+      }
+    }
+
     const headerSlug = request.headers.get('x-tenant-slug');
     if (headerSlug && headerSlug.trim().length > 0) {
       const sanitized = headerSlug.trim().toLowerCase();

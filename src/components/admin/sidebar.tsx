@@ -59,7 +59,7 @@ const mainNavItems: NavItem[] = [
 ];
 
 const platformNavItems: NavItem[] = [
-  { label: 'Tenants', href: '/tenants', icon: Building2 },
+  { label: 'Client Stores & Billing', href: '/tenants', icon: Building2 },
 ];
 
 export function Sidebar() {

@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Building2,
   Plus,
@@ -8,88 +9,63 @@ import {
   ExternalLink,
   CheckCircle,
   AlertTriangle,
-  Archive,
   Store,
-  Layers,
   Sparkles,
-  Users,
+  Receipt,
+  IndianRupee,
+  Package,
+  ShoppingCart,
+  TrendingUp,
+  FileText,
+  CreditCard,
+  Send,
+  Eye,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useAdminContext } from '@/components/admin/admin-context';
+import { useAdminContext, TenantInfo } from '@/components/admin/admin-context';
+import { formatMoney, createMoney } from '@/lib/money';
 
-export interface TenantRecord {
-  id: string;
-  name: string;
-  slug: string;
-  plan: 'Starter' | 'Growth' | 'Pro' | 'Enterprise';
-  status: 'active' | 'suspended' | 'archived';
-  customDomain?: string;
-  productsCount: number;
-  ordersCount: number;
-  createdAt: string;
-}
+export default function PlatformTenantsPage() {
+  const router = useRouter();
+  const {
+    currentTenant,
+    setCurrentTenant,
+    tenantsList,
+    updateTenantStatus,
+    addTenant,
+  } = useAdminContext();
 
-const initialTenants: TenantRecord[] = [
-  {
-    id: 'tenant_01JADMIN000000000000000001',
-    name: 'Urban Style & Apparel',
-    slug: 'urban-style',
-    plan: 'Growth',
-    status: 'active',
-    customDomain: 'urbanstyle.store',
-    productsCount: 42,
-    ordersCount: 318,
-    createdAt: '2026-01-15T08:00:00Z',
-  },
-  {
-    id: 'tenant_01JADMIN000000000000000002',
-    name: 'Artisan Crafts Co.',
-    slug: 'artisan-crafts',
-    plan: 'Pro',
-    status: 'active',
-    customDomain: 'artisancrafts.in',
-    productsCount: 19,
-    ordersCount: 94,
-    createdAt: '2026-02-01T10:30:00Z',
-  },
-  {
-    id: 'tenant_01JADMIN000000000000000003',
-    name: 'Bloom Floral Studio',
-    slug: 'bloom-flowers',
-    plan: 'Starter',
-    status: 'active',
-    productsCount: 15,
-    ordersCount: 62,
-    createdAt: '2026-03-10T14:15:00Z',
-  },
-  {
-    id: 'tenant_01JADMIN000000000000000004',
-    name: 'Apex Sports Equipment',
-    slug: 'apex-sports',
-    plan: 'Enterprise',
-    status: 'suspended',
-    customDomain: 'apexsports.io',
-    productsCount: 120,
-    ordersCount: 840,
-    createdAt: '2025-11-20T09:00:00Z',
-  },
-];
-
-export default function TenantsPage() {
-  const { currentTenant, setCurrentTenant } = useAdminContext();
-  const [tenantsList, setTenantsList] = React.useState<TenantRecord[]>(initialTenants);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState<'all' | 'active' | 'suspended' | 'archived'>('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false);
-  const [successToast, setSuccessToast] = React.useState<string | null>(null);
+  const [selectedInvoiceTenant, setSelectedInvoiceTenant] = React.useState<TenantInfo | null>(null);
+  const [toastMessage, setToastMessage] = React.useState<string | null>(null);
 
   // New Tenant Form state
   const [newName, setNewName] = React.useState('');
   const [newSlug, setNewSlug] = React.useState('');
   const [newPlan, setNewPlan] = React.useState<'Starter' | 'Growth' | 'Pro' | 'Enterprise'>('Growth');
-  const [newEmail, setNewEmail] = React.useState('');
+  const [newDomain, setNewDomain] = React.useState('');
+
+  // Platform Aggregations for the SaaS Owner
+  const totalStores = tenantsList.length;
+  const activeStores = tenantsList.filter((t) => t.status === 'active').length;
+  const totalEcosystemGMVMinorUnits = tenantsList.reduce((acc, t) => acc + t.revenueMinorUnits, 0);
+  const totalEcosystemOrders = tenantsList.reduce((acc, t) => acc + t.ordersCount, 0);
+  const totalEcosystemProducts = tenantsList.reduce((acc, t) => acc + t.productsCount, 0);
+
+  // Platform Company SaaS Earnings (Monthly Subscriptions + Commission)
+  const totalSubscriptionFeesMinorUnits = tenantsList.reduce(
+    (acc, t) => acc + (t.status === 'active' ? t.monthlyPlanFeeMinorUnits : 0),
+    0
+  );
+  const totalCommissionFeesMinorUnits = tenantsList.reduce(
+    (acc, t) => acc + Math.round(t.revenueMinorUnits * t.platformCommissionRate),
+    0
+  );
+  const totalPlatformEarningsMinorUnits = totalSubscriptionFeesMinorUnits + totalCommissionFeesMinorUnits;
 
   const filteredTenants = tenantsList.filter((tenant) => {
     const matchesSearch =
@@ -107,11 +83,19 @@ export default function TenantsPage() {
     }
   };
 
+  const planPricingMap: Record<'Starter' | 'Growth' | 'Pro' | 'Enterprise', { feeMinor: number; commission: number }> = {
+    Starter: { feeMinor: 99900, commission: 0.03 },
+    Growth: { feeMinor: 249900, commission: 0.025 },
+    Pro: { feeMinor: 499900, commission: 0.02 },
+    Enterprise: { feeMinor: 1299900, commission: 0.015 },
+  };
+
   const handleCreateTenant = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim() || !newSlug.trim()) return;
 
-    const newTenant: TenantRecord = {
+    const pricing = planPricingMap[newPlan];
+    const newTenant: TenantInfo = {
       id: `tenant_${Date.now().toString(36)}`,
       name: newName.trim(),
       slug: newSlug.trim().toLowerCase(),
@@ -119,104 +103,147 @@ export default function TenantsPage() {
       status: 'active',
       productsCount: 0,
       ordersCount: 0,
-      createdAt: new Date().toISOString(),
+      revenueMinorUnits: 0,
+      profitMinorUnits: 0,
+      platformCommissionRate: pricing.commission,
+      monthlyPlanFeeMinorUnits: pricing.feeMinor,
+      billingStatus: 'pending',
+      customDomain: newDomain.trim() || undefined,
+      deliveredOrders: 0,
+      shippedOrders: 0,
+      processingOrders: 0,
+      pendingOrders: 0,
+      customersCount: 0,
     };
 
-    setTenantsList((prev) => [newTenant, ...prev]);
+    addTenant(newTenant);
     setIsCreateModalOpen(false);
-    setSuccessToast(`Tenant "${newTenant.name}" successfully created!`);
-    setTimeout(() => setSuccessToast(null), 4000);
+    setToastMessage(`Client store "${newTenant.name}" successfully provisioned!`);
+    setTimeout(() => setToastMessage(null), 4000);
 
-    // Reset form
     setNewName('');
     setNewSlug('');
-    setNewEmail('');
+    setNewDomain('');
   };
 
-  const handleToggleStatus = (id: string) => {
-    setTenantsList((prev) =>
-      prev.map((t) => {
-        if (t.id !== id) return t;
-        const newStatus = t.status === 'active' ? 'suspended' : 'active';
-        return { ...t, status: newStatus };
-      })
-    );
-  };
-
-  const handleSwitchTenant = (tenant: TenantRecord) => {
-    setCurrentTenant({
-      id: tenant.id,
-      name: tenant.name,
-      slug: tenant.slug,
-      plan: tenant.plan,
-    });
-    setSuccessToast(`Switched active context to ${tenant.name}`);
-    setTimeout(() => setSuccessToast(null), 3000);
+  const handleSwitchToStoreAdmin = (tenant: TenantInfo) => {
+    setCurrentTenant(tenant);
+    setToastMessage(`Switched active context to ${tenant.name}. Redirecting to Store Dashboard...`);
+    setTimeout(() => {
+      router.push('/dashboard');
+    }, 600);
   };
 
   return (
     <div className="space-y-6">
-      {/* Toast Feedback */}
-      {successToast && (
+      {/* Toast Alert */}
+      {toastMessage && (
         <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-4 text-sm text-emerald-800 flex items-center gap-2 shadow-sm animate-fade-in">
           <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>{successToast}</span>
+          <span>{toastMessage}</span>
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      {/* Main Company Admin Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-gray-200 pb-5">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider bg-blue-600 text-white px-2.5 py-0.5 rounded-full">
+              SaaS Owner Panel
+            </span>
+            <span className="text-xs font-medium text-gray-500">Platform Company View</span>
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl mt-1 flex items-center gap-2.5">
             <Building2 className="w-7 h-7 text-blue-600" />
-            <span>Platform Tenants</span>
+            <span>Client Stores & Tenant Billing</span>
           </h1>
           <p className="mt-1 text-sm text-gray-500">
-            Provision, monitor, and manage multi-tenant e-commerce client brands and isolated stores.
+            Track all client store products, orders, GMV sales, and billable platform revenue/commission.
           </p>
         </div>
 
         <Button onClick={() => setIsCreateModalOpen(true)} className="flex items-center gap-1.5 self-start sm:self-auto">
           <Plus className="w-4 h-4" />
-          <span>Create Tenant</span>
+          <span>Provision New Store</span>
         </Button>
       </div>
 
-      {/* Active Context Banner */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-base shadow-sm">
-            {currentTenant.name.charAt(0)}
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider">Active Workspace Tenant</p>
-            <h3 className="font-bold text-gray-900 text-base">{currentTenant.name}</h3>
-            <p className="text-xs text-gray-500 font-mono">slug: {currentTenant.slug} • Plan: {currentTenant.plan}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <a
-            href={`http://localhost:3000?tenant=${currentTenant.slug}`}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-700 bg-white border border-blue-200 px-3 py-1.5 rounded-lg shadow-sm hover:bg-blue-50 transition-colors"
-          >
-            <Store className="w-3.5 h-3.5" />
-            <span>Open Storefront</span>
-            <ExternalLink className="w-3 h-3 text-gray-400" />
-          </a>
-        </div>
+      {/* Top Company KPI Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Total Platform Stores */}
+        <Card className="border-gray-200 shadow-sm bg-white">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between text-gray-500">
+              <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Total Client Brands</span>
+              <Store className="w-4 h-4 text-blue-600" />
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl font-bold text-gray-900">{totalStores} Stores</span>
+              <span className="text-xs font-semibold text-emerald-600">{activeStores} active</span>
+            </div>
+            <p className="mt-1 text-xs text-gray-400 font-mono">{totalEcosystemProducts} total catalog products</p>
+          </CardContent>
+        </Card>
+
+        {/* Total Ecosystem GMV */}
+        <Card className="border-gray-200 shadow-sm bg-white">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between text-gray-500">
+              <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Total Client Sales (GMV)</span>
+              <TrendingUp className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl font-bold text-gray-900">
+                {formatMoney(createMoney(totalEcosystemGMVMinorUnits, 'INR'))}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-gray-400 font-mono">{totalEcosystemOrders} orders processed across all stores</p>
+          </CardContent>
+        </Card>
+
+        {/* Company SaaS Earnings (Monthly Fees + Commission) */}
+        <Card className="border-blue-200 shadow-sm bg-gradient-to-br from-blue-50/60 to-indigo-50/50">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between text-blue-700">
+              <span className="text-xs font-bold uppercase tracking-wider text-blue-900">Your Platform Earnings</span>
+              <IndianRupee className="w-4 h-4 text-blue-700" />
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl font-black text-blue-950">
+                {formatMoney(createMoney(totalPlatformEarningsMinorUnits, 'INR'))}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-blue-800/80 font-medium">
+              Plans: {formatMoney(createMoney(totalSubscriptionFeesMinorUnits, 'INR'))} + Cut: {formatMoney(createMoney(totalCommissionFeesMinorUnits, 'INR'))}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Total Orders Handled */}
+        <Card className="border-gray-200 shadow-sm bg-white">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between text-gray-500">
+              <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Total Orders Fulfilled</span>
+              <ShoppingCart className="w-4 h-4 text-purple-600" />
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl font-bold text-gray-900">{totalEcosystemOrders.toLocaleString()}</span>
+              <span className="text-xs font-semibold text-emerald-600">All Stores</span>
+            </div>
+            <p className="mt-1 text-xs text-gray-400 font-mono">Real-time fulfillment tracking</p>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Filters & Search */}
+      {/* Filter and Search Bar */}
       <Card>
-        <CardContent className="p-4 sm:p-6">
+        <CardContent className="p-4 sm:p-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search by name, slug, or custom domain..."
+                placeholder="Search stores by brand name, slug, or domain..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -242,38 +269,46 @@ export default function TenantsPage() {
         </CardContent>
       </Card>
 
-      {/* Tenants Table */}
+      {/* Tenant Performance & Billing Table */}
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm text-gray-600">
               <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-500 font-semibold">
                 <tr>
-                  <th scope="col" className="px-6 py-3.5">Brand / Store</th>
-                  <th scope="col" className="px-6 py-3.5">Plan</th>
-                  <th scope="col" className="px-6 py-3.5">Status</th>
-                  <th scope="col" className="px-6 py-3.5">Catalog</th>
-                  <th scope="col" className="px-6 py-3.5">Orders</th>
-                  <th scope="col" className="px-6 py-3.5 text-right">Actions</th>
+                  <th scope="col" className="px-5 py-3.5">Client Store</th>
+                  <th scope="col" className="px-4 py-3.5">Catalog</th>
+                  <th scope="col" className="px-4 py-3.5">Orders</th>
+                  <th scope="col" className="px-4 py-3.5">Store Revenue (GMV)</th>
+                  <th scope="col" className="px-4 py-3.5">Plan & Fee</th>
+                  <th scope="col" className="px-4 py-3.5">Commission Cut</th>
+                  <th scope="col" className="px-4 py-3.5 font-bold text-gray-900">Total Billable</th>
+                  <th scope="col" className="px-4 py-3.5">Status</th>
+                  <th scope="col" className="px-5 py-3.5 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {filteredTenants.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                    <td colSpan={9} className="px-6 py-12 text-center text-gray-500">
                       <Building2 className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                      <p className="font-semibold text-gray-900">No tenants found</p>
-                      <p className="text-xs text-gray-500 mt-0.5">Try adjusting your search terms or filter.</p>
+                      <p className="font-semibold text-gray-900">No stores found</p>
+                      <p className="text-xs text-gray-500 mt-0.5">Try adjusting your search criteria.</p>
                     </td>
                   </tr>
                 ) : (
                   filteredTenants.map((tenant) => {
                     const isCurrent = currentTenant.id === tenant.id;
+                    const commissionAmount = Math.round(tenant.revenueMinorUnits * tenant.platformCommissionRate);
+                    const totalBillableAmount = tenant.monthlyPlanFeeMinorUnits + commissionAmount;
+                    const liveWebsiteUrl = `http://localhost:3000/?tenant=${tenant.slug}`;
+
                     return (
                       <tr key={tenant.id} className="hover:bg-gray-50/80 transition-colors">
-                        <td className="px-6 py-4">
+                        {/* Store Info */}
+                        <td className="px-5 py-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-lg bg-gray-100 border border-gray-200 text-gray-700 flex items-center justify-center font-bold text-sm">
+                            <div className="w-10 h-10 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center font-bold text-sm shadow-sm shrink-0">
                               {tenant.name.charAt(0)}
                             </div>
                             <div>
@@ -281,7 +316,7 @@ export default function TenantsPage() {
                                 <span className="font-semibold text-gray-900">{tenant.name}</span>
                                 {isCurrent && (
                                   <span className="text-[10px] font-bold uppercase bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                                    Current
+                                    Active Now
                                   </span>
                                 )}
                               </div>
@@ -298,15 +333,68 @@ export default function TenantsPage() {
                           </div>
                         </td>
 
-                        <td className="px-6 py-4">
-                          <Badge variant="outline" className="font-medium text-xs">
-                            {tenant.plan}
-                          </Badge>
+                        {/* Catalog */}
+                        <td className="px-4 py-4 font-mono text-gray-800 text-xs">
+                          {tenant.productsCount} products
                         </td>
 
-                        <td className="px-6 py-4">
+                        {/* Orders */}
+                        <td className="px-4 py-4">
+                          <div className="font-mono text-gray-900 font-medium text-xs">
+                            {tenant.ordersCount} orders
+                          </div>
+                          <div className="text-[11px] text-gray-400">
+                            {tenant.deliveredOrders} delivered
+                          </div>
+                        </td>
+
+                        {/* Store Sales (GMV) */}
+                        <td className="px-4 py-4">
+                          <span className="font-semibold text-gray-900 text-xs">
+                            {formatMoney(createMoney(tenant.revenueMinorUnits, 'INR'))}
+                          </span>
+                        </td>
+
+                        {/* Plan & Monthly Fee */}
+                        <td className="px-4 py-4">
+                          <Badge variant="outline" className="font-medium text-[11px] border-blue-300 text-blue-700 bg-blue-50/40">
+                            {tenant.plan}
+                          </Badge>
+                          <div className="text-[11px] text-gray-500 mt-1">
+                            {formatMoney(createMoney(tenant.monthlyPlanFeeMinorUnits, 'INR'))}/mo
+                          </div>
+                        </td>
+
+                        {/* Platform Commission Cut */}
+                        <td className="px-4 py-4 text-xs font-mono text-gray-600">
+                          <div>{(tenant.platformCommissionRate * 100).toFixed(1)}% cut</div>
+                          <div className="font-semibold text-gray-800">
+                            {formatMoney(createMoney(commissionAmount, 'INR'))}
+                          </div>
+                        </td>
+
+                        {/* Total Billable to Client */}
+                        <td className="px-4 py-4">
+                          <div className="font-bold text-blue-900 text-xs">
+                            {formatMoney(createMoney(totalBillableAmount, 'INR'))}
+                          </div>
                           <span
-                            className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full capitalize ${
+                            className={`inline-block mt-0.5 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                              tenant.billingStatus === 'paid'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : tenant.billingStatus === 'due'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
+                            {tenant.billingStatus}
+                          </span>
+                        </td>
+
+                        {/* Store Status */}
+                        <td className="px-4 py-4">
+                          <span
+                            className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${
                               tenant.status === 'active'
                                 ? 'bg-emerald-50 text-emerald-700'
                                 : tenant.status === 'suspended'
@@ -327,32 +415,55 @@ export default function TenantsPage() {
                           </span>
                         </td>
 
-                        <td className="px-6 py-4 font-mono text-gray-700 text-xs">
-                          {tenant.productsCount} items
-                        </td>
+                        {/* Actions */}
+                        <td className="px-5 py-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {/* View Live Storefront Website */}
+                            <a
+                              href={liveWebsiteUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-xs font-medium text-gray-700 hover:text-blue-600 bg-white border border-gray-200 hover:bg-gray-50 px-2 py-1 rounded shadow-xs transition-colors"
+                              title="Open this client's live website"
+                            >
+                              <ExternalLink className="w-3 h-3 text-gray-500" />
+                              <span>Live Site</span>
+                            </a>
 
-                        <td className="px-6 py-4 font-mono text-gray-700 text-xs">
-                          {tenant.ordersCount}
-                        </td>
-
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            {!isCurrent && (
-                              <button
-                                onClick={() => handleSwitchTenant(tenant)}
-                                className="text-xs font-medium text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded transition-colors"
-                              >
-                                Switch To
-                              </button>
-                            )}
-
+                            {/* View Bill / Invoice Details */}
                             <button
-                              onClick={() => handleToggleStatus(tenant.id)}
-                              className={`text-xs font-medium px-2.5 py-1 rounded transition-colors ${
+                              onClick={() => setSelectedInvoiceTenant(tenant)}
+                              className="inline-flex items-center gap-1 text-xs font-medium text-gray-700 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded transition-colors"
+                              title="Inspect billing calculation & invoice"
+                            >
+                              <Receipt className="w-3 h-3 text-gray-500" />
+                              <span>Bill</span>
+                            </button>
+
+                            {/* Switch to this tenant's admin dashboard */}
+                            <button
+                              onClick={() => handleSwitchToStoreAdmin(tenant)}
+                              className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:text-white bg-blue-50 hover:bg-blue-600 px-2.5 py-1 rounded transition-colors"
+                              title="Switch to this store's admin panel"
+                            >
+                              <Store className="w-3 h-3" />
+                              <span>Store Admin</span>
+                            </button>
+
+                            {/* Suspend / Activate Toggle */}
+                            <button
+                              onClick={() =>
+                                updateTenantStatus(
+                                  tenant.id,
+                                  tenant.status === 'active' ? 'suspended' : 'active'
+                                )
+                              }
+                              className={`text-[11px] font-medium px-2 py-1 rounded transition-colors ${
                                 tenant.status === 'active'
                                   ? 'text-amber-700 hover:bg-amber-50'
                                   : 'text-emerald-700 hover:bg-emerald-50'
                               }`}
+                              title={tenant.status === 'active' ? 'Suspend store' : 'Activate store'}
                             >
                               {tenant.status === 'active' ? 'Suspend' : 'Activate'}
                             </button>
@@ -368,15 +479,130 @@ export default function TenantsPage() {
         </CardContent>
       </Card>
 
-      {/* Provision New Tenant Modal */}
+      {/* Invoice / Billing Breakdown Modal */}
+      {selectedInvoiceTenant && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border border-gray-200">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-blue-100 text-blue-700 rounded-lg">
+                  <Receipt className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-gray-900">Tenant Billing Statement</h3>
+                  <p className="text-xs text-gray-500 font-mono">
+                    Client: {selectedInvoiceTenant.name} ({selectedInvoiceTenant.slug})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedInvoiceTenant(null)}
+                className="text-gray-400 hover:text-gray-600 text-xl font-bold leading-none p-1"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="rounded-lg bg-blue-50/60 border border-blue-100 p-3.5 flex justify-between items-center text-xs">
+                <div>
+                  <span className="font-bold text-blue-900 uppercase">Billing Cycle:</span>{' '}
+                  <span className="text-blue-800">October 2026</span>
+                </div>
+                <div>
+                  <Badge variant="outline" className="border-blue-300 text-blue-800 bg-white">
+                    {selectedInvoiceTenant.plan} Tier
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Itemized Calculations */}
+              <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 text-xs">
+                <div className="p-3 flex justify-between items-center">
+                  <div>
+                    <p className="font-semibold text-gray-900">{selectedInvoiceTenant.plan} Subscription Plan</p>
+                    <p className="text-gray-400 text-[11px]">Monthly fixed SaaS platform hosting & builder license</p>
+                  </div>
+                  <span className="font-mono font-medium text-gray-900">
+                    {formatMoney(createMoney(selectedInvoiceTenant.monthlyPlanFeeMinorUnits, 'INR'))}
+                  </span>
+                </div>
+
+                <div className="p-3 flex justify-between items-center">
+                  <div>
+                    <p className="font-semibold text-gray-900">
+                      Platform Transaction Fee ({(selectedInvoiceTenant.platformCommissionRate * 100).toFixed(1)}%)
+                    </p>
+                    <p className="text-gray-400 text-[11px]">
+                      Applied on {selectedInvoiceTenant.ordersCount} orders (GMV:{' '}
+                      {formatMoney(createMoney(selectedInvoiceTenant.revenueMinorUnits, 'INR'))})
+                    </p>
+                  </div>
+                  <span className="font-mono font-medium text-gray-900">
+                    {formatMoney(
+                      createMoney(
+                        Math.round(selectedInvoiceTenant.revenueMinorUnits * selectedInvoiceTenant.platformCommissionRate),
+                        'INR'
+                      )
+                    )}
+                  </span>
+                </div>
+
+                <div className="p-3 bg-gray-50 flex justify-between items-center font-bold text-sm text-gray-900">
+                  <span>Total Billable to Client</span>
+                  <span className="text-blue-900">
+                    {formatMoney(
+                      createMoney(
+                        selectedInvoiceTenant.monthlyPlanFeeMinorUnits +
+                          Math.round(selectedInvoiceTenant.revenueMinorUnits * selectedInvoiceTenant.platformCommissionRate),
+                        'INR'
+                      )
+                    )}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-xs text-gray-500 pt-2">
+                <span>Payment Status:</span>
+                <span className="font-bold uppercase text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                  {selectedInvoiceTenant.billingStatus}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedInvoiceTenant(null)}
+              >
+                Close
+              </Button>
+              <Button
+                size="sm"
+                className="flex items-center gap-1.5"
+                onClick={() => {
+                  alert(`Invoice sent to ${selectedInvoiceTenant.name} billing contact!`);
+                  setSelectedInvoiceTenant(null);
+                }}
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Send Bill to Client</span>
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Provision New Store Modal */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in">
           <div className="bg-white rounded-xl shadow-xl max-w-lg w-full overflow-hidden border border-gray-200">
             <div className="p-6 border-b border-gray-100 flex items-center justify-between">
               <div>
-                <h3 className="font-bold text-lg text-gray-900">Provision New Tenant</h3>
+                <h3 className="font-bold text-lg text-gray-900">Provision New Client Store</h3>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Creates an isolated tenant database partition, default theme, and starter storefront.
+                  Creates an isolated tenant partition, default theme, and storefront.
                 </p>
               </div>
               <button
@@ -390,7 +616,7 @@ export default function TenantsPage() {
             <form onSubmit={handleCreateTenant} className="p-6 space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                  Tenant / Brand Name *
+                  Store / Brand Name *
                 </label>
                 <input
                   type="text"
@@ -404,7 +630,7 @@ export default function TenantsPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                  Subdomain / Slug *
+                  Store Subdomain Slug *
                 </label>
                 <div className="flex rounded-lg shadow-sm">
                   <input
@@ -423,30 +649,30 @@ export default function TenantsPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                  Owner Email
+                  Custom Vanity Domain (Optional)
                 </label>
                 <input
-                  type="email"
-                  placeholder="owner@brand.com"
-                  value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
-                  className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  type="text"
+                  placeholder="e.g. www.velvetandoak.com"
+                  value={newDomain}
+                  onChange={(e) => setNewDomain(e.target.value)}
+                  className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                  Subscription Tier
+                  Subscription Tier & Commission Rate
                 </label>
                 <select
                   value={newPlan}
                   onChange={(e) => setNewPlan(e.target.value as any)}
                   className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 >
-                  <option value="Starter">Starter (Up to 50 products)</option>
-                  <option value="Growth">Growth (Up to 500 products)</option>
-                  <option value="Pro">Pro (Unlimited products + Custom domains)</option>
-                  <option value="Enterprise">Enterprise (Dedicated AWS partition)</option>
+                  <option value="Starter">Starter (₹999/mo + 3.0% platform commission)</option>
+                  <option value="Growth">Growth (₹2,499/mo + 2.5% platform commission)</option>
+                  <option value="Pro">Pro (₹4,999/mo + 2.0% platform commission)</option>
+                  <option value="Enterprise">Enterprise (₹12,999/mo + 1.5% platform commission)</option>
                 </select>
               </div>
 
@@ -454,7 +680,7 @@ export default function TenantsPage() {
                 <Button type="button" variant="outline" onClick={() => setIsCreateModalOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit">Provision Tenant</Button>
+                <Button type="submit">Provision Store</Button>
               </div>
             </form>
           </div>

@@ -13,6 +13,7 @@ import {
   Settings,
   LogOut,
   ChevronDown,
+  ExternalLink,
 } from 'lucide-react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useAdminContext, TenantInfo } from './admin-context';
@@ -106,6 +107,19 @@ export function Header() {
             DEV
           </span>
         )}
+
+        {/* Quick View Storefront Button */}
+        <a
+          href={`http://localhost:3000/?tenant=${currentTenant.slug}`}
+          target="_blank"
+          rel="noreferrer"
+          className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 px-2.5 py-1.5 rounded-md shadow-xs transition-colors"
+          title="Open live website for the active store"
+        >
+          <Store className="h-3.5 w-3.5 text-blue-600" />
+          <span>Live Site</span>
+          <ExternalLink className="h-3 w-3 text-gray-400" />
+        </a>
 
         {/* Tenant / Store Selector Dropdown */}
         <DropdownMenu.Root>
