@@ -240,8 +240,10 @@ export async function listOrders(
   tenantId: string,
   options: ListOrdersOptions = {}
 ) {
-  const page = Math.max(1, options.page ?? 1);
-  const pageSize = Math.min(100, Math.max(1, options.pageSize ?? 20));
+  const rawPage = Number(options.page);
+  const rawPageSize = Number(options.pageSize);
+  const page = Number.isFinite(rawPage) && rawPage >= 1 ? Math.floor(rawPage) : 1;
+  const pageSize = Number.isFinite(rawPageSize) && rawPageSize >= 1 ? Math.min(100, Math.floor(rawPageSize)) : 20;
   const offset = (page - 1) * pageSize;
 
   const conditions = [eq(orders.tenantId, tenantId)];
