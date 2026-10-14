@@ -23,7 +23,7 @@ export interface TenantOption {
 }
 
 export interface TenantSwitcherProps {
-  tenants?: TenantOption[];
+  tenants?: TenantOption[] | null;
   currentTenantId?: string;
   onSelectTenant?: (tenant: TenantOption) => void;
   className?: string;
@@ -55,7 +55,7 @@ export function TenantSwitcher({
   const [selectedId, setSelectedId] = React.useState<string>(currentTenantId);
 
   const activeTenant =
-    tenants.find((t) => t.id === selectedId) || tenants[0] || null;
+    (tenants || []).find((t) => t.id === selectedId) || (tenants || [])[0] || null;
 
   const handleSelect = (tenant: TenantOption) => {
     setSelectedId(tenant.id);
@@ -93,7 +93,7 @@ export function TenantSwitcher({
       <DropdownMenuContent className="w-64" align="start">
         <DropdownMenuLabel>Stores & Tenants</DropdownMenuLabel>
         <DropdownMenuGroup>
-          {tenants.map((tenant) => {
+          {(tenants || []).map((tenant) => {
             const isSelected = tenant.id === activeTenant?.id;
             return (
               <DropdownMenuItem
