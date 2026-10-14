@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { db } from '@/lib/db';
 import type { DbOrTx } from '@/lib/db';
@@ -178,22 +178,24 @@ export async function processCheckout(
 
     // Fetch products
     const productIds = Array.from(new Set(lockedVariants.map((v) => v.productId)));
-    const lockedProducts = await tx
-      .select({
-        id: products.id,
-        title: products.title,
-        status: products.status,
-        listPrice: products.listPrice,
-        salePrice: products.salePrice,
-        deliveryFeeOverride: products.deliveryFeeOverride,
-      })
-      .from(products)
-      .where(
-        and(
-          eq(products.tenantId, tenantId),
-          sql`${products.id} IN ${productIds}`
-        )
-      );
+    const lockedProducts = productIds.length > 0
+      ? await tx
+          .select({
+            id: products.id,
+            title: products.title,
+            status: products.status,
+            listPrice: products.listPrice,
+            salePrice: products.salePrice,
+            deliveryFeeOverride: products.deliveryFeeOverride,
+          })
+          .from(products)
+          .where(
+            and(
+              eq(products.tenantId, tenantId),
+              inArray(products.id, productIds)
+            )
+          )
+      : [];
 
     const productMap = new Map(lockedProducts.map((p) => [p.id, p]));
 
@@ -208,7 +210,7 @@ export async function processCheckout(
           .where(
             and(
               eq(productImages.tenantId, tenantId),
-              sql`${productImages.productId} IN ${productIds}`
+              inArray(productImages.productId, productIds)
             )
           )
           .orderBy(productImages.sortOrder)
